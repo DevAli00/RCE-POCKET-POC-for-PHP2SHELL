@@ -152,7 +152,7 @@ def print_footer():
 
 
 # ---------------------------------------------------------------------------
-# Spinner [\ | / -] - Karim BOUDRA @ ULTRADEFENSE LAB
+# Spinner
 #
 class Spinner:
     CHARS = "\\|/-"          # la sequence classique [ \ | / - ]
