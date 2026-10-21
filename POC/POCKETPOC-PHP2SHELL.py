@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# DISCLAIMER:
+# This project is provided strictly for educational purposes and authorized security research.
+# You are solely responsible for how you use it. The author assumes no liability for misuse,
+# damage, or illegal activity. Use it only on systems you own or have explicit permission to test.
+
 """
 PHP 8.x unserialize UAF -> RCE (remote, against remote_app.php).
 
