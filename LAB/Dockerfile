@@ -1,4 +1,4 @@
-FROM php:8.5.11-apache
+FROM php:8.5.12-apache
 
 # Vulnerable-by-design lab target for CVE-2026-109618 / CVE-2026-109619.
 # Pin the base so a future tag bump can't swap in the fixed release.

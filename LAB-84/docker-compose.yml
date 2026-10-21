@@ -1,0 +1,10 @@
+services:
+  php2shell-lab84:
+    build: .
+    image: php2shell-lab84:latest
+    container_name: php2shell-lab84
+    network_mode: bridge
+    ports:
+      - "8487:80"
+      - "8484:443"
+    restart: unless-stopped

@@ -1,0 +1,11 @@
+services:
+  php2shell-x64:
+    build: .
+    image: php2shell-x64:latest
+    container_name: php2shell-x64
+    platform: linux/amd64
+    network_mode: bridge
+    ports:
+      - "8488:80"
+      - "8485:443"
+    restart: unless-stopped

