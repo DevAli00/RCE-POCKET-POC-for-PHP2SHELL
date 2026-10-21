@@ -100,3 +100,7 @@ Research credits: Calif (MAD Bugs, public `C:` PoC), Nicolas Grekas (GH-23981,
 PoC author: Karim BOUDRA @ ULTRADEFENSE LAB.
 
 Greetings: CYBERSEC TEAM
+
+## Disclaimer
+
+This project is provided strictly for educational purposes and authorized security research. You are solely responsible for how you use it. The author assumes no liability for misuse, damage, or illegal activity. Use it only on systems you own or have explicit permission to test.
