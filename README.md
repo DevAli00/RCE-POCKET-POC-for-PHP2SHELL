@@ -8,6 +8,12 @@
 ![Chaînes](https://img.shields.io/badge/RCE-4%2F4%20confirmées-brightgreen)
 ![Portée](https://img.shields.io/badge/portée-lab%20uniquement-yellow)
 
+## Démonstration vidéo
+
+[![Aperçu animé de la démonstration PHP2SHELL](POC-preview.gif)](POC-demo.mp4)
+
+**[▶ Lire la vidéo complète](POC-demo.mp4)**
+
 Deux RCE dans le coeur de `unserialize()` de PHP (branches `C:` Serializable et
 `E:` enum-autoload du `var_unserializer.re`), reproduites le jour même du patch :
 root en local avec `disable_functions` contourné, shell `www-data` à distance en
