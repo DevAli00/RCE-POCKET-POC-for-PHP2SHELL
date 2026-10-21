@@ -14,9 +14,9 @@
 
 **[▶ Play the full video](POC-demo.mp4)**
 
-Two RCEs in PHP's `unserialize()` core (`C:` Serializable and `E:` enum-autoload
-branches in `var_unserializer.re`), reproduced on the day the patch was released:
-local root with `disable_functions` bypassed, and a remote `www-data` shell in
+Two RCEs in PHP's unserialize() core (C: Serializable and E: enum-autoload
+branches in var_unserializer.re), reproduced on the day the patch was released:
+local root with disable_functions bypassed, and a remote www-data shell in
 ~2,200 requests over both HTTP and TLS, for both CVEs.
 
 ## Structure
