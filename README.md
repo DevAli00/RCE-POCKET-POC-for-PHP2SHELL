@@ -30,12 +30,7 @@ LAB/                     cible vulnérable en Docker, config bridge
   remote_app_enum.php    porte E: (autoload d'enum)
   check.php              détecteur safe des 2 branches + scan des sinks
 POC/
-  php8_remote.py         exploit distant branche C:  (--url https://… --insecure)
-  php8_remote_enum.py    exploit distant branche E:
-  local_exploit.php      exploit local branche C:   (root + bypass disable_functions)
-  enum_exploit.php       exploit local branche E:
-  pocket_poc.php         PoC de poche : bannière ASCII, sondes 2 CVE, démo UAF
-requirements.txt         aucun paquet pip requis (stdlib uniquement), no-op CI
+  POCKETPOC-PHP2SHELL.py         exploit avec reverse shell
 index.html               page du dépôt
 ```
 
@@ -47,13 +42,8 @@ index.html               page du dépôt
 | PHP CLI >= 7.4 | PoC de poche `pocket_poc.php` | 8.5.11 (NTS) |
 | Docker + Compose | lab cible `LAB/` | 29.6.2 / v5.1.4 |
 
-Installation : les exploits Python n'ont **aucune dépendance pip** (stdlib
-uniquement : `socket`, `ssl`, `struct`, `argparse`, `shutil`, `threading`).
-Le fichier `requirements.txt` est volontairement vide de paquets et sert de
-no-op pour les pipelines CI :
 
 ```bash
-pip3 install -r requirements.txt   # no-op : rien à installer, stdlib uniquement
 python3 --version                  # >= 3.8 requis
 php --version                      # CLI, pour le PoC de poche
 docker compose version             # pour LAB/run.sh
