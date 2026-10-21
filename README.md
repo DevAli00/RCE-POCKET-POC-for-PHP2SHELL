@@ -95,7 +95,7 @@ crash-DoS rules of engagement. This repository is a lab: expose it only on contr
 networks, and shut it down with `./run.sh down` after use.
 
 Research credits: Calif (MAD Bugs, public `C:` PoC), Nicolas Grekas (GH-23981,
-`E:` branch). `E:` variants.
+`E:` branch).
 
 PoC author: Karim BOUDRA @ ULTRADEFENSE LAB.
 
