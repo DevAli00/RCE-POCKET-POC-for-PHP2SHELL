@@ -98,4 +98,5 @@ Research credits: Calif (MAD Bugs, public `C:` PoC), Nicolas Grekas (GH-23981,
 `E:` branch). `E:` variants.
 
 PoC author: Karim BOUDRA @ ULTRADEFENSE LAB.
-Greetings: CYBERSEC TEAM / ULTRADEFENSE TEAM.
+
+Greetings: CYBERSEC TEAM
